@@ -283,10 +283,32 @@ app.delete('/api/admin/delete-all', verifyToken, async (req, res) => {
   }
 })
 
+app.get('/api/keep-alive', (req, res) => {
+  res.json({ status: 'alive', timestamp: new Date().toISOString() })
+})
+
+const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`
+const PING_INTERVAL = 4 * 60 * 1000
+
+function pingServer() {
+  setTimeout(async () => {
+    try {
+      const response = await fetch(`${SERVER_URL}/api/keep-alive`)
+      if (response.ok) {
+        console.log(`[Keep-alive] Server pinged at ${new Date().toISOString()}`)
+      }
+    } catch (error) {
+      console.log('[Keep-alive] Ping failed, will retry...')
+    }
+    pingServer()
+  }, PING_INTERVAL)
+}
+
 initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
     console.log('Database tables created/verified successfully')
+    pingServer()
   })
 }).catch((error) => {
   console.error('Failed to initialize database:', error)
